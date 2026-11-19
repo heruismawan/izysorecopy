@@ -5,15 +5,8 @@ import Button from '../components/Button';
 import Input from '../components/Input';
 import Table from '../components/Table';
 import Modal from '../components/Modal';
-import {
-  Search,
-  Plus,
-  Edit2,
-  Trash2,
-  Barcode,
-  Smartphone,
-  Share2
-} from 'lucide-react';
+import { Download, Upload, Plus, Edit2, Trash2, Smartphone, X, Search, FileText, Barcode } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export const InventoryView = () => {
   const {
@@ -27,12 +20,13 @@ export const InventoryView = () => {
   // Search/Filter State
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Semua');
+  const [stockFilter, setStockFilter] = useState('Tersedia'); // 'Semua', 'Tersedia', 'Habis'
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, categoryFilter]);
+  }, [searchQuery, categoryFilter, stockFilter]);
 
   // Form States (Add/Edit)
   const [showFormModal, setShowFormModal] = useState(false);
@@ -68,16 +62,21 @@ export const InventoryView = () => {
 
   // Role restrictions
   const isKasir = currentUser.role === 'kasir';
-  const canModify = currentUser.role === 'admin' || currentUser.role === 'owner';
+  const canModify = currentUser.role === 'kepala toko' || currentUser.role === 'owner';
   const isOwner = currentUser.role === 'owner';
 
   // Filters
   const filteredInventory = inventory.filter((item) => {
     const matchesSearch = item.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.imei && item.imei.includes(searchQuery));
+      (item.brand && item.brand.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (item.barcode && item.barcode.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCategory = categoryFilter === 'Semua' || item.kategori === categoryFilter;
-    return matchesSearch && matchesCategory;
+    
+    let matchesStock = true;
+    if (stockFilter === 'Tersedia') matchesStock = item.stok > 0;
+    if (stockFilter === 'Habis') matchesStock = item.stok <= 0;
+    
+    return matchesSearch && matchesCategory && matchesStock;
   });
 
   const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
@@ -117,7 +116,7 @@ export const InventoryView = () => {
       hargaBeli: '',
       hargaJual: '',
       stok: '1',
-      imei: '',
+      barcode: '',
       garansiAsal: 'iBox',
       garansiAktif: false,
       gradeFisik: 'A',
@@ -157,7 +156,11 @@ export const InventoryView = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!formData.imei) {
+    if (!formData.model) {
+      alert('Model / Nama Produk wajib diisi!');
+      return;
+    }
+    if (!formData.barcode) {
       alert('Kode Barcode / Batch Supplier wajib diisi!');
       return;
     }
@@ -209,10 +212,10 @@ export const InventoryView = () => {
     }).format(val);
   };
 
-  const handleExportCSV = () => {
+  const handleExportExcel = () => {
     const headers = [
       'SKU',
-      'Barcode / IMEI',
+      'Barcode',
       'Model Produk',
       'Warna',
       'ROM',
@@ -223,7 +226,7 @@ export const InventoryView = () => {
       'Atribut Tambahan'
     ];
 
-    const csvRows = [headers.join(',')];
+    const excelData = [];
 
     const finalExportItems = filteredInventory.filter(item => {
       if (exportFilter === 'Semua') return true;
@@ -248,52 +251,65 @@ export const InventoryView = () => {
       const specsString = specs.join('; ');
 
       const row = [
-        `"${item.sku}"`,
-        `"${item.imei || '-'}"`,
-        `"${item.model}"`,
-        `"${item.warna || '-'}"`,
-        `"${item.rom || '-'}"`,
-        `"${item.kondisi}"`,
-        item.stok,
-        ...(isOwner ? [item.hargaBeli] : []),
-        item.hargaJual,
-        `"${specsString.replace(/"/g, '""')}"`
+        item.sku,
+        item.barcode || '-',
+        item.model,
+        item.warna || '-',
+        item.rom || '-',
+        item.kondisi,
+        Number(item.stok || 0),
+        ...(isOwner ? [Number(item.hargaBeli || 0)] : []),
+        Number(item.hargaJual || 0),
+        specsString
       ];
 
-      csvRows.push(row.join(','));
+      excelData.push(row);
     });
 
-    const csvContent = '\uFEFF' + csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `stok-inventaris-izystore-${new Date().toISOString().slice(0, 10)}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Create worksheet
+    const worksheet = XLSX.utils.aoa_to_sheet([headers, ...excelData]);
+
+    // Format columns width
+    const wscols = [
+      {wch: 25}, // SKU
+      {wch: 20}, // Barcode
+      {wch: 35}, // Model
+      {wch: 15}, // Warna
+      {wch: 10}, // ROM
+      {wch: 12}, // Kondisi
+      {wch: 10}, // Stok
+      ...(isOwner ? [{wch: 15}] : []), // Modal
+      {wch: 15}, // Jual
+      {wch: 50}, // Atribut
+    ];
+    worksheet['!cols'] = wscols;
+
+    // Create workbook
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Stok Inventaris");
+
+    // Generate file and trigger download
+    XLSX.writeFile(workbook, `stok-inventaris-izystore-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    
     setShowExportModal(false);
   };
 
   return (
     <div className="p-4 flex flex-col gap-6 text-left dark:text-slate-200">
-      <div className="flex justify-between items-center bg-white dark:bg-slate-900 rounded-3xl border border-white/60 dark:border-slate-800/40 shadow-neo dark:shadow-neo-dark p-5 transition-all duration-300">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 rounded-3xl border border-white/60 dark:border-slate-800/40 shadow-neo dark:shadow-neo-dark p-5 transition-all duration-300">
         <div>
           <h2 className="text-xl font-black uppercase tracking-wider text-slate-800 dark:text-slate-100 m-0 flex items-center gap-2">
             <Smartphone size={22} className="text-emerald-500 dark:text-emerald-400" />
             Manajemen Stok & Atribut Gadget
           </h2>
-          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">
-            Lihat daftar stok, kelola atribut khusus iPhone bekas, dan cetak label barcode.
-          </p>
+
         </div>
-        <div className="flex gap-2 shrink-0">
-          <Button variant="white" onClick={() => setShowExportModal(true)} className="flex items-center gap-1.5 !rounded-xl">
-            <Share2 size={14} strokeWidth={2.5} />
-            <span>Ekspor Excel</span>
+        <div className="flex flex-col md:flex-row gap-2 mt-4 md:mt-0 w-full md:w-auto">
+          <Button variant="white" onClick={() => setShowExportModal(true)} className="flex items-center justify-center gap-1.5 !rounded-xl w-full md:w-auto">
+            <FileText size={14} strokeWidth={2.5} className="text-slate-500" />
+            <span>Export Excel</span>
           </Button>
-          <Button variant="green" onClick={handleOpenAdd} className="flex items-center gap-1.5 !rounded-xl">
+          <Button variant="green" onClick={handleOpenAdd} className="flex items-center justify-center gap-1.5 !rounded-xl w-full md:w-auto">
             <Plus size={14} strokeWidth={2.5} />
             <span>Tambah Barang</span>
           </Button>
@@ -304,13 +320,11 @@ export const InventoryView = () => {
         title="Daftar Inventaris Toko"
         headerBg="bg-orange-100/70"
         bodyClassName="p-4 flex flex-col gap-4"
-
       >
-        {/* Search & Category filter */}
         <div className="w-full flex flex-col md:flex-row gap-3 mb-2">
           <div className="max-w-sm flex-1">
             <Input
-              placeholder="Cari SKU, Model, Brand, IMEI..."
+              placeholder="Cari SKU, Model, Brand, Barcode..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               icon={Search}
@@ -319,16 +333,24 @@ export const InventoryView = () => {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-bold bg-slate-50/50 dark:bg-slate-800/80 text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-950/50 outline-none transition-all duration-200 cursor-pointer w-full md:w-48"
+            className="border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-bold bg-slate-50/50 dark:bg-slate-800/80 text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-950/50 outline-none transition-all duration-200 cursor-pointer w-full md:w-36"
           >
             <option value="Semua">Semua Kategori</option>
             <option value="Gadget">Gadget</option>
             <option value="Sparepart">Sparepart</option>
             <option value="Aksesoris">Aksesoris</option>
           </select>
+          <select
+            value={stockFilter}
+            onChange={(e) => setStockFilter(e.target.value)}
+            className="border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-bold bg-slate-50/50 dark:bg-slate-800/80 text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-950/50 outline-none transition-all duration-200 cursor-pointer w-full md:w-44"
+          >
+            <option value="Tersedia">Hanya Tersedia</option>
+            <option value="Habis">Arsip (Habis)</option>
+            <option value="Semua">Semua Stok</option>
+          </select>
         </div>
 
-        {/* Table inventory list */}
         <Table
           headers={
             isOwner
@@ -337,13 +359,11 @@ export const InventoryView = () => {
           }
           rows={displayedInventory}
           renderRow={(product, index) => {
-            const isAppleBekas = product.kondisi === 'Bekas';
-
             return (
               <tr key={product.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-350">
                 <td className="px-4 py-3.5 border-r border-slate-100/50 dark:border-slate-800/30 font-mono">
                   <div className="font-bold text-slate-800 dark:text-slate-100">{product.sku}</div>
-                  {product.imei && <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-0.5">Barcode: {product.imei}</div>}
+                  {product.barcode && <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold mt-0.5">Barcode: {product.barcode}</div>}
                 </td>
                 <td className="px-4 py-3.5 border-r border-slate-100/50 dark:border-slate-800/30">
                   <span className="font-extrabold text-sm text-slate-800 dark:text-slate-100">{product.model}</span>
@@ -352,11 +372,10 @@ export const InventoryView = () => {
                   )}
                 </td>
                 <td className="px-4 py-3.5 border-r border-slate-100/50 dark:border-slate-800/30 text-center">
-                  <span className={`
-                    text-[9px] font-black uppercase px-2 py-0.5 rounded-lg border border-white/50 dark:border-slate-800/30 shadow-[inset_0_1.5px_2px_rgba(255,255,255,0.7)] dark:shadow-[inset_0_1px_1.5px_rgba(255,255,255,0.15)]
+                  <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider
                     ${product.kondisi === 'Baru' ? 'bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400' : 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400'}
-                  `}>
-                    {product.kondisi}
+                    `}>
+                    {product.kondisi === 'Bekas' ? 'Second' : product.kondisi}
                   </span>
                 </td>
                 <td className="px-4 py-3.5 border-r border-slate-100/50 dark:border-slate-800/30 text-center font-bold text-sm text-slate-800 dark:text-slate-100">
@@ -438,8 +457,8 @@ export const InventoryView = () => {
                   className={`
                     w-7 h-7 flex items-center justify-center text-[10px] font-black rounded-xl border transition-all cursor-pointer
                     ${activePage === page
-                      ? 'bg-slate-800 dark:bg-orange-500 text-white dark:text-slate-950 border-transparent shadow-sm'
-                      : 'bg-slate-550 dark:bg-slate-800 text-slate-550 dark:text-slate-400 border-slate-200/40 dark:border-slate-700/50 hover:scale-105 active:scale-95'
+                      ? 'bg-orange-500 text-white dark:text-slate-950 border-transparent shadow-sm'
+                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200/40 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700 hover:scale-105 active:scale-95'
                     }
                   `}
                 >
@@ -466,9 +485,7 @@ export const InventoryView = () => {
         maxWidth="max-w-lg"
       >
         <form onSubmit={handleSubmit} className="flex flex-col gap-4 text-left">
-
           <div className="grid grid-cols-2 gap-3">
-            {/* Kategori Select */}
             <div className="flex flex-col gap-1 text-left">
               <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 pl-1">Kategori Barang</label>
               <select
@@ -481,8 +498,6 @@ export const InventoryView = () => {
                 <option value="Sparepart">Sparepart</option>
               </select>
             </div>
-
-            {/* Kondisi Select */}
             <div className="flex flex-col gap-1 text-left">
               <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 pl-1">Kondisi Barang</label>
               <select
@@ -526,8 +541,8 @@ export const InventoryView = () => {
           <Input
             label="Kode Barcode / Batch Supplier"
             placeholder="Contoh: a1-64-11-64-7"
-            value={formData.imei}
-            onChange={(e) => setFormData({ ...formData, imei: e.target.value })}
+            value={formData.barcode}
+            onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
             required
           />
 
@@ -562,9 +577,10 @@ export const InventoryView = () => {
           {/* DYNAMIC SPECS FOR APPLE BEKAS / SECOND HP */}
           {formData.kategori === 'Gadget' && formData.kondisi === 'Bekas' && (
             <div className="border border-slate-100 dark:border-slate-800/40 rounded-2xl bg-slate-50/70 dark:bg-slate-950/40 p-5 flex flex-col gap-3">
-              <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 block border-b border-slate-100 dark:border-slate-800/40 pb-1.5">
-                Spesifikasi Kondisi Bekas (iPhone Spec)
-              </span>
+              <h4 className="text-xs font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider mb-3 pb-2 border-b border-slate-100 dark:border-slate-800/60 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                Spesifikasi Kondisi Second (iPhone Spec)
+              </h4>
 
               <div className="grid grid-cols-3 gap-3">
                 <div className="flex flex-col gap-1 text-left">
@@ -576,6 +592,7 @@ export const InventoryView = () => {
                   >
                     <option value="iBox">iBox / Resmi Indonesia</option>
                     <option value="Inter">Inter / Internasional</option>
+                    <option value="Bea Cukai">Bea Cukai (Pajak Resmi)</option>
                   </select>
                 </div>
 
@@ -639,13 +656,13 @@ export const InventoryView = () => {
           <div className="flex flex-col gap-4 text-center items-center justify-center">
             <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 rounded-2xl p-4 w-[240px] flex flex-col items-center justify-center shadow-sm font-sans transition-all duration-300">
               <span className="text-[8px] font-black tracking-widest uppercase text-slate-400 dark:text-slate-500 block mb-0.5">
-                IZYSTORE GADGET
+                IZYSTORE
               </span>
               <span className="font-extrabold text-[11px] text-slate-700 dark:text-slate-200 text-center truncate max-w-full">
                 {barcodeProduct.model}
               </span>
               <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 mt-0.5">
-                {barcodeProduct.warna} • {barcodeProduct.kondisi}
+                {barcodeProduct.warna} • {barcodeProduct.kondisi === 'Bekas' ? 'Second' : barcodeProduct.kondisi}
               </span>
 
               {/* Fake Barcode Graphic */}
@@ -662,9 +679,9 @@ export const InventoryView = () => {
               <span className="font-mono text-[9px] font-black text-slate-700 dark:text-slate-300">
                 {barcodeProduct.sku}
               </span>
-              {barcodeProduct.imei && (
+              {barcodeProduct.barcode && (
                 <span className="font-mono text-[8px] font-bold text-slate-400 dark:text-slate-500 mt-0.5 truncate max-w-full">
-                  Barcode: {barcodeProduct.imei}
+                  Barcode: {barcodeProduct.barcode}
                 </span>
               )}
             </div>
@@ -707,7 +724,7 @@ export const InventoryView = () => {
           </div>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="white" onClick={() => setShowExportModal(false)}>Batal</Button>
-            <Button variant="green" onClick={handleExportCSV}>Unduh Excel</Button>
+            <Button variant="green" onClick={handleExportExcel}>Unduh Excel</Button>
           </div>
         </div>
       </Modal>

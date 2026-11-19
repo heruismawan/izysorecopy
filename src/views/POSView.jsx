@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import html2canvas from 'html2canvas';
 import { useApp } from '../context/AppContext';
 import Card from '../components/Card';
 import Button from '../components/Button';
@@ -24,7 +25,8 @@ import {
   Award,
   Battery,
   Shield,
-  Camera
+  Camera,
+  Download
 } from 'lucide-react';
 
 export const POSView = () => {
@@ -60,13 +62,12 @@ export const POSView = () => {
   // Cart / Payment States
   const [checkoutForm, setCheckoutForm] = useState({
     salesperson: '',
-    helper: ''
+    helper: '',
+    networkStatus: ''
   });
   const [discountInput, setDiscountInput] = useState('');
-  const [isDiscountAuthorized, setIsDiscountAuthorized] = useState(false);
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [adminPin, setAdminPin] = useState('');
-  const [pinError, setPinError] = useState('');
+  const [adminFeeInput, setAdminFeeInput] = useState('');
+
 
   // Payment Modal States
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -93,14 +94,15 @@ export const POSView = () => {
     return (
       item.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (item.imei && item.imei.includes(searchQuery))
+      (item.barcode && item.barcode.toLowerCase().includes(searchQuery.toLowerCase()))
     ) && item.stok > 0;
   });
 
   // Calculations
   const subtotal = cart.reduce((acc, item) => acc + item.hargaJual * item.qty, 0);
   const discountVal = parseFloat(discountInput) || 0;
-  const total = Math.max(0, subtotal - discountVal);
+  const adminFeeVal = parseFloat(adminFeeInput) || 0;
+  const total = Math.max(0, subtotal - discountVal + adminFeeVal);
 
   const handleAddToCart = (product) => {
     const res = addToCart(product);
@@ -109,33 +111,214 @@ export const POSView = () => {
     }
   };
 
-  // PIN Otorisasi Admin
-  const handleApplyDiscount = () => {
-    if (discountVal > 100000 && !isDiscountAuthorized) {
-      setShowPinModal(true);
-      setPinError('');
-      setAdminPin('');
+  const handlePrintReceipt = () => {
+    const originalElement = document.getElementById('printable-receipt');
+    if (!originalElement) return;
+
+    // Klon elemen struk
+    const clone = originalElement.cloneNode(true);
+    
+    // Beri styling khusus untuk dicetak (hilangkan shadow, reset margin, set lebar thermal 58mm)
+    clone.style.width = '58mm';
+    clone.style.margin = '0 auto';
+    clone.style.padding = '0';
+    clone.style.position = 'relative'; 
+    clone.style.overflow = 'visible';
+    clone.style.boxShadow = 'none';
+    clone.style.border = 'none';
+
+    // Buat container rahasia di body khusus untuk print
+    const printContainer = document.createElement('div');
+    printContainer.id = 'print-container';
+    printContainer.appendChild(clone);
+    document.body.appendChild(printContainer);
+
+    // Tambahkan tag style sementara untuk menyembunyikan elemen utama aplikasi
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @media print {
+        body > *:not(#print-container) {
+          display: none !important;
+        }
+        @page {
+          margin: 0;
+          size: 58mm auto;
+        }
+        body, html {
+          background: white !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          height: auto !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // Tunggu browser meng-apply CSS sebelum memanggil print
+    setTimeout(() => {
+      window.print();
+
+      // Bersihkan kembali ke kondisi semula
+      setTimeout(() => {
+        if (document.body.contains(printContainer)) {
+          document.body.removeChild(printContainer);
+        }
+        if (document.head.contains(style)) {
+          document.head.removeChild(style);
+        }
+      }, 1000);
+    }, 150);
+  };
+
+  const handleDownloadReceipt = async () => {
+    const originalElement = document.getElementById('printable-receipt');
+    if (!originalElement) return;
+    
+    // Klon elemen agar tidak terpotong oleh batas scroll Modal
+    const clone = originalElement.cloneNode(true);
+    clone.style.position = 'absolute';
+    clone.style.top = '-9999px';
+    clone.style.left = '-9999px';
+    clone.style.width = '380px';
+    clone.style.height = 'auto';
+    clone.style.overflow = 'visible'; // Hapus batasan overflow
+    clone.style.zIndex = '-1';
+    
+    // Fix bug html2canvas: border-dashed bikin render terpotong
+    const dashedElements = clone.querySelectorAll('.border-dashed');
+    dashedElements.forEach(el => {
+      el.classList.remove('border-dashed');
+      el.classList.add('border-solid');
+    });
+    
+    document.body.appendChild(clone);
+    
+    try {
+      const canvas = await html2canvas(clone, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        windowWidth: clone.scrollWidth,
+        windowHeight: clone.scrollHeight
+      });
+      const dataUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `Nota-IZYstore-${receiptData?.invoiceNo || Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Failed to download receipt', err);
+      alert('Gagal mengunduh nota');
+    } finally {
+      document.body.removeChild(clone);
     }
   };
 
-  const handleVerifyPin = (e) => {
-    e.preventDefault();
-    // PIN admin is 1234, Owner PIN is 9999
-    if (adminPin === '1234' || adminPin === '9999') {
-      setIsDiscountAuthorized(true);
-      setShowPinModal(false);
-      alert('Otorisasi Diskon Berhasil!');
-    } else {
-      setPinError('PIN Salah! Otorisasi ditolak.');
+  const handleAndroidPrint = async () => {
+    if (!receiptData) return;
+    
+    try {
+      const center = (str) => {
+        const pad = Math.max(0, Math.floor((32 - str.length) / 2));
+        return " ".repeat(pad) + str;
+      };
+      
+      const leftRight = (left, right) => {
+        const spaces = Math.max(1, 32 - left.length - right.length);
+        return left + " ".repeat(spaces) + right;
+      };
+
+      let text = center("IZYSTORE") + "\n";
+      text += center("Jl. Bend. Sigura-gura Barat") + "\n";
+      text += center("No. 22, Malang") + "\n";
+      text += center("Telp: 0819-9909-4111") + "\n";
+      text += "--------------------------------\n"; // 32 chars
+      
+      text += leftRight("No Invoice:", receiptData.invoiceNo || '') + "\n";
+      
+      let dateStr = '';
+      if (receiptData.date) {
+        const d = new Date(receiptData.date);
+        dateStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}, ${d.getHours().toString().padStart(2,'0')}.${d.getMinutes().toString().padStart(2,'0')}.${d.getSeconds().toString().padStart(2,'0')}`;
+      }
+      text += leftRight("Tanggal:", dateStr) + "\n";
+      text += leftRight("Operator:", currentUser?.name || receiptData.cashier || 'Admin') + "\n";
+      text += leftRight("Sales:", receiptData.salesperson || 'Tanpa Sales') + "\n";
+      text += leftRight("Jenis:", "PENJUALAN") + "\n";
+      
+      if (checkoutForm.customerName) text += leftRight("Pelanggan:", checkoutForm.customerName) + "\n";
+      text += "--------------------------------\n";
+      
+      // Items
+      (receiptData.items || []).forEach(item => {
+        const subtotalStr = "Rp " + ((item.qty || 0) * (item.price || item.hargaJual || 0)).toLocaleString('id-ID');
+        const qtyName = `${item.qty}x ${item.name || item.model || ''}`;
+        let safeQtyName = qtyName;
+        if (safeQtyName.length + subtotalStr.length + 1 > 32) {
+          safeQtyName = safeQtyName.substring(0, 32 - subtotalStr.length - 1);
+        }
+        text += leftRight(safeQtyName, subtotalStr) + "\n";
+        
+        if (item.imei) {
+          text += `IMEI: ${item.imei} ${item.kondisi ? `(${item.kondisi})` : ''}\n`;
+        }
+      });
+      text += "--------------------------------\n";
+      
+      // Totals
+      const manualSubtotal = (receiptData.items || []).reduce((sum, item) => sum + ((item.qty || 0) * (item.price || item.hargaJual || 0)), 0);
+      text += leftRight("Subtotal:", "Rp " + manualSubtotal.toLocaleString('id-ID')) + "\n";
+      
+      if (receiptData.discount > 0) {
+        text += leftRight("Diskon:", "-Rp " + Number(receiptData.discount || 0).toLocaleString('id-ID')) + "\n";
+      }
+      
+      if (receiptData.adminFee > 0) {
+        text += leftRight("Biaya Admin:", "Rp " + Number(receiptData.adminFee || 0).toLocaleString('id-ID')) + "\n";
+      }
+      
+      text += leftRight("TOTAL:", "Rp " + Number(receiptData.total || 0).toLocaleString('id-ID')) + "\n";
+      text += "--------------------------------\n";
+      
+      // Payments
+      if (receiptData.paymentMethod === 'Split' || receiptData.isSplitPayment) {
+        const pay1 = "Rp " + Number(receiptData.splitAmount1 || receiptData.splitDetails?.amount1 || 0).toLocaleString('id-ID');
+        const m1 = (receiptData.splitMethod1 || receiptData.splitDetails?.method1 || 'Tunai').substring(0, 10);
+        text += leftRight(`Bayar (${m1}):`, pay1) + "\n";
+        
+        const pay2 = "Rp " + Number(receiptData.splitAmount2 || receiptData.splitDetails?.amount2 || 0).toLocaleString('id-ID');
+        const m2 = (receiptData.splitMethod2 || receiptData.splitDetails?.method2 || 'Transfer').substring(0, 10);
+        text += leftRight(`Bayar (${m2}):`, pay2) + "\n";
+      } else {
+        const pay = "Rp " + Number(receiptData.paymentAmount || receiptData.cashAmount || 0).toLocaleString('id-ID');
+        const m = (receiptData.paymentMethod || 'Tunai').substring(0, 10);
+        text += leftRight(`Bayar (${m}):`, pay) + "\n";
+      }
+      
+      const changeStr = "Rp " + Number(receiptData.change || receiptData.changeAmount || 0).toLocaleString('id-ID');
+      text += leftRight("Kembalian:", changeStr) + "\n";
+      
+      text += "--------------------------------\n";
+      text += center("TERIMA KASIH ATAS KUNJUNGAN ANDA") + "\n";
+      text += center("Garansi Toko wajib membawa") + "\n";
+      text += center("nota ini / IMEI tercatat.") + "\n";
+      
+      // Panggil RawBT Intent API
+      const intentUrl = `intent:rawbt:${encodeURI(text)}#Intent;package=ru.a402d.rawbtprinter;end;`;
+      window.location.href = intentUrl;
+    } catch (err) {
+      console.error('Failed to print to Android', err);
+      alert(`Gagal mencetak ke Android: ${err.message || 'Unknown error'}`);
     }
   };
+
 
   const handleHoldCart = () => {
     const res = holdTransaction(checkoutForm.salesperson, 'Sales');
     if (res.success) {
-      setCheckoutForm({ salesperson: '', helper: '' });
+      setCheckoutForm({ salesperson: '', helper: '', networkStatus: '' });
       setDiscountInput('');
-      setIsDiscountAuthorized(false);
+      setAdminFeeInput('');
       alert('Transaksi berhasil ditunda (Hold).');
     } else {
       alert(res.message);
@@ -159,14 +342,6 @@ export const POSView = () => {
       return;
     }
 
-    // Check authorization for discount > 100k
-    if (discountVal > 100000 && !isDiscountAuthorized) {
-      setShowPinModal(true);
-      setPinError('');
-      setAdminPin('');
-      return;
-    }
-    
     // Reset cash input for Tunai
     setCashReceived(total);
     setShowPaymentModal(true);
@@ -201,16 +376,18 @@ export const POSView = () => {
 
     const itemsWithPhysicalImei = cart.map((item) => ({
       ...item,
-      barcode: item.imei,
-      imei: item.physicalImei || item.imei
+      barcode: item.barcode,
+      imei: item.physicalImei || item.barcode // Kasir input physicalImei untuk Baru, jika Bekas, mungkin sama
     }));
 
     const res = completeTransaction({
       items: itemsWithPhysicalImei,
       salesperson: checkoutForm.salesperson,
       helper: checkoutForm.helper,
+      networkStatus: checkoutForm.networkStatus,
       salespersonRole: 'Sales',
       discount: discountVal,
+      adminFee: adminFeeVal,
       total,
       paymentMethod: payMethodName,
       cashAmount: isSplit ? (splitMethod1 === 'Tunai' ? splitAmount1 : (splitMethod2 === 'Tunai' ? splitAmount2 : 0)) : (paymentMethod === 'Tunai' ? cash : total),
@@ -222,11 +399,13 @@ export const POSView = () => {
     if (res.success) {
       setReceiptData({
         invoiceNo: res.invoiceNo,
-        items: res.transaction.items,
+        items: [...res.transaction.items],
         salesperson: res.transaction.salesperson,
         helper: res.transaction.helper,
+        networkStatus: res.transaction.network_status,
         salespersonRole: res.transaction.salespersonRole,
-        discount: res.transaction.discount,
+        discount: discountVal,
+        adminFee: adminFeeVal,
         subtotal,
         total: res.transaction.total,
         paymentMethod: res.transaction.paymentMethod,
@@ -241,9 +420,8 @@ export const POSView = () => {
       setShowReceiptModal(true);
       
       // Reset POS form
-      setCheckoutForm({ salesperson: '', helper: '' });
+      setCheckoutForm({ salesperson: '', helper: '', networkStatus: '' });
       setDiscountInput('');
-      setIsDiscountAuthorized(false);
       setIsSplit(false);
     }
   };
@@ -256,11 +434,28 @@ export const POSView = () => {
     }).format(val);
   };
 
+  const getColorBadgeStyle = (warna) => {
+    if (!warna) return "bg-slate-100/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200/20 dark:border-slate-700/30";
+    const w = warna.toLowerCase();
+    if (w.includes('pink') || w.includes('rose')) return "bg-pink-100 dark:bg-pink-950/40 text-pink-700 dark:text-pink-400 border-pink-200/50 dark:border-pink-900/30 shadow-[0_0_8px_rgba(244,63,94,0.2)]";
+    if (w.includes('blue') || w.includes('biru') || w.includes('pacific')) return "bg-blue-100 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200/50 dark:border-blue-900/30 shadow-[0_0_8px_rgba(59,130,246,0.2)]";
+    if (w.includes('green') || w.includes('hijau') || w.includes('mint')) return "bg-emerald-100 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200/50 dark:border-emerald-900/30 shadow-[0_0_8px_rgba(16,185,129,0.2)]";
+    if (w.includes('red') || w.includes('merah')) return "bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border-red-200/50 dark:border-red-900/30 shadow-[0_0_8px_rgba(239,68,68,0.2)]";
+    if (w.includes('yellow') || w.includes('kuning') || w.includes('gold') || w.includes('emas')) return "bg-yellow-100 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-400 border-yellow-200/50 dark:border-yellow-900/30 shadow-[0_0_8px_rgba(234,179,8,0.2)]";
+    if (w.includes('purple') || w.includes('ungu')) return "bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border-purple-200/50 dark:border-purple-900/30 shadow-[0_0_8px_rgba(168,85,247,0.2)]";
+    if (w.includes('black') || w.includes('hitam') || w.includes('midnight')) return "bg-slate-800 dark:bg-slate-900 text-slate-200 dark:text-slate-300 border-slate-700 dark:border-slate-800 shadow-[0_0_8px_rgba(15,23,42,0.2)]";
+    if (w.includes('white') || w.includes('putih') || w.includes('starlight')) return "bg-white dark:bg-slate-200 text-slate-700 dark:text-slate-900 border-slate-200 dark:border-white shadow-[0_0_8px_rgba(255,255,255,0.4)]";
+    if (w.includes('silver') || w.includes('perak') || w.includes('grey') || w.includes('gray') || w.includes('titanium')) return "bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300/50 dark:border-slate-700 shadow-[0_0_8px_rgba(148,163,184,0.2)]";
+    if (w.includes('orange') || w.includes('oranye')) return "bg-orange-100 dark:bg-orange-950/40 text-orange-700 dark:text-orange-400 border-orange-200/50 dark:border-orange-900/30 shadow-[0_0_8px_rgba(249,115,22,0.2)]";
+    
+    return "bg-slate-100/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200/20 dark:border-slate-700/30";
+  };
+
   return (
     <div className="flex flex-col h-full overflow-hidden p-1 dark:text-slate-200">
       
       {/* Mobile Tab Switcher */}
-      <div className="flex md:hidden mb-3 bg-slate-100 dark:bg-slate-950 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-1 shrink-0 select-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none">
+      <div className="flex lg:hidden mb-3 bg-slate-100 dark:bg-slate-950 border border-slate-200/50 dark:border-slate-800/40 rounded-2xl p-1 shrink-0 select-none shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] dark:shadow-none">
         <button
           onClick={() => setActiveMobileTab('produk')}
           className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${
@@ -289,10 +484,10 @@ export const POSView = () => {
       </div>
 
       {/* Main Responsive POS Layout Container */}
-      <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 h-[calc(100dvh-8.5rem)] md:h-[calc(100dvh-5rem)] overflow-hidden">
+      <div className="flex-1 flex flex-col lg:flex-row gap-4 lg:gap-6 h-[calc(100dvh-8.5rem)] lg:h-[calc(100dvh-5rem)] overflow-hidden">
         
         {/* LEFT PANEL: PRODUCT SEARCH & GRID */}
-        <div className={`flex flex-col gap-4 h-full md:w-[60%] ${activeMobileTab === 'produk' ? 'w-full flex' : 'hidden md:flex'}`}>
+        <div className={`flex flex-col gap-4 h-full lg:w-[60%] ${activeMobileTab === 'produk' ? 'w-full flex' : 'hidden lg:flex'}`}>
         <Card 
           title="Pencarian Produk & Gadget" 
           headerBg="bg-orange-100/70"
@@ -304,7 +499,7 @@ export const POSView = () => {
             <div className="flex gap-2.5 items-center w-full">
               <div className="flex-1">
                 <Input
-                  placeholder="Cari berdasarkan Brand, Model, SKU, IMEI..."
+                  placeholder="Cari berdasarkan Brand, Model, SKU, Barcode..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   icon={Search}
@@ -369,10 +564,10 @@ export const POSView = () => {
                               text-[7.5px] md:text-[8px] font-black uppercase px-2 py-0.5 md:px-2.5 md:py-1 rounded-full shadow-sm text-white tracking-widest border border-white/20
                               ${product.kondisi === 'Baru' 
                                 ? 'bg-gradient-to-r from-emerald-500 to-teal-500 shadow-emerald-500/10' 
-                                : 'bg-gradient-to-r from-purple-550 to-indigo-500 shadow-purple-500/10'
+                                : 'bg-gradient-to-r from-purple-500 to-indigo-500 shadow-purple-500/10'
                               }
                             `}>
-                              {product.kondisi}
+                              {product.kondisi === 'Bekas' ? 'Second' : product.kondisi}
                             </span>
                           </div>
                         </div>
@@ -390,7 +585,7 @@ export const POSView = () => {
                             <Cpu size={7} className="md:w-2 md:h-2" />
                             <span>{product.rom}</span>
                           </span>
-                          <span className="inline-flex items-center gap-1 text-[7px] md:text-[8px] font-bold bg-slate-100/70 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 md:px-2 py-0.5 rounded-md md:rounded-lg border border-slate-200/20 dark:border-slate-700/30">
+                          <span className={`inline-flex items-center gap-1 text-[7px] md:text-[8px] font-bold px-1.5 md:px-2 py-0.5 rounded-md md:rounded-lg border transition-all ${getColorBadgeStyle(product.warna)}`}>
                             <Layers size={7} className="md:w-2 md:h-2" />
                             <span>{product.warna}</span>
                           </span>
@@ -416,11 +611,11 @@ export const POSView = () => {
                           </div>
                         )}
 
-                        {/* IMEI Details */}
+                        {/* Barcode Details */}
                         {product.kategori === 'Gadget' && (
                           <div className="mt-2 md:mt-2.5">
                             <span className="text-[7.5px] md:text-[8px] font-bold font-mono text-slate-400 dark:text-slate-500 bg-slate-100/60 dark:bg-slate-950/50 border border-slate-205/30 dark:border-slate-800/40 rounded-md md:rounded-lg px-2 py-0.5 md:py-1 inline-block truncate max-w-full">
-                              IMEI: {product.imei}
+                              Barcode: {product.barcode}
                             </span>
                           </div>
                         )}
@@ -454,7 +649,7 @@ export const POSView = () => {
       </div>
 
         {/* RIGHT PANEL: CART & CHECKOUT */}
-        <div className={`flex flex-col gap-4 h-full md:w-[40%] ${activeMobileTab === 'keranjang' ? 'w-full flex' : 'hidden md:flex'}`}>
+        <div className={`flex flex-col gap-4 h-full lg:w-[40%] ${activeMobileTab === 'keranjang' ? 'w-full flex' : 'hidden lg:flex'}`}>
         <Card
           title="Keranjang Belanja"
           headerBg="bg-emerald-100/70"
@@ -474,8 +669,10 @@ export const POSView = () => {
             )
           }
         >
-          {/* Cart Item List */}
-          <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-2.5 mb-4">
+          {/* SCROLLABLE AREA (Items + Forms + Summaries) */}
+          <div className="flex-1 overflow-y-auto pr-1 flex flex-col gap-4">
+            {/* Cart Item List */}
+            <div className="flex flex-col gap-2.5">
             {cart.length > 0 ? (
               cart.map((item) => (
                 <div 
@@ -485,25 +682,27 @@ export const POSView = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[8px] font-black uppercase border border-slate-100 dark:border-slate-800/40 rounded-md px-1 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400">
-                        {item.kondisi}
+                        {item.kondisi === 'Bekas' ? 'Second' : item.kondisi}
                       </span>
                     </div>
                     <h5 className="font-extrabold text-xs text-slate-700 dark:text-slate-200 truncate">{item.model}</h5>
-                    <p className="text-[8px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 truncate">Barcode: {item.imei}</p>
+                    <p className="text-[8px] text-slate-400 dark:text-slate-500 font-mono mt-0.5 truncate">Barcode: {item.barcode}</p>
                     <span className="font-extrabold text-[11px] text-slate-800 dark:text-slate-100 block mb-1">
                       {handleFormatRupiah(item.hargaJual)}
                     </span>
-                    <div className="flex flex-col gap-0.5 mt-1 border-t border-slate-200/50 dark:border-slate-800/40 pt-1.5">
-                      <label className="text-[7.5px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500 pl-0.5">IMEI Fisik Perangkat (15 digit) *</label>
-                      <input
-                        type="text"
-                        placeholder="Masukkan IMEI 15 digit"
-                        value={item.physicalImei || ''}
-                        onChange={(e) => updateCartItemImei(item.cartId || item.id, e.target.value.replace(/\D/g, '').slice(0, 15))}
-                        required
-                        className="w-full px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 text-[10px] font-bold text-slate-800 dark:text-slate-100 rounded-lg outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-950/40 transition-all font-mono"
-                      />
-                    </div>
+                    {item.kategori === 'Gadget' && (
+                      <div className="flex flex-col gap-0.5 mt-1 border-t border-slate-200/50 dark:border-slate-800/40 pt-1.5">
+                        <label className="text-[7.5px] font-black uppercase tracking-wider text-slate-450 dark:text-slate-500 pl-0.5">IMEI Fisik Perangkat (15 digit) *</label>
+                        <input
+                          type="text"
+                          placeholder="Masukkan IMEI 15 digit"
+                          value={item.physicalImei || ''}
+                          onChange={(e) => updateCartItemImei(item.cartId || item.id, e.target.value.replace(/\D/g, '').slice(0, 15))}
+                          required
+                          className="w-full px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 text-[10px] font-bold text-slate-800 dark:text-slate-100 rounded-lg outline-none focus:ring-2 focus:ring-orange-100 dark:focus:ring-orange-950/40 transition-all font-mono"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 select-none">
@@ -527,10 +726,10 @@ export const POSView = () => {
                 <span className="text-[9px] mt-1 font-semibold">Pilih produk di panel kiri.</span>
               </div>
             )}
-          </div>
+            </div>
 
-          {/* Cart Footer: Inputs, Totals & Checkout */}
-          <div className="border-t border-slate-100 dark:border-slate-800/40 pt-4 bg-white dark:bg-slate-900 flex flex-col gap-3 transition-all">
+            {/* Cart Footer: Inputs & Totals */}
+            <div className="border-t border-slate-100 dark:border-slate-800/40 pt-4 flex flex-col gap-3 transition-all">
             {/* Discount Manual */}
             <div className="flex gap-2 items-end">
               <div className="flex-1">
@@ -539,26 +738,20 @@ export const POSView = () => {
                   type="number"
                   placeholder="Contoh: 50000"
                   value={discountInput}
-                  onChange={(e) => {
-                    setDiscountInput(e.target.value);
-                    setIsDiscountAuthorized(false); // Reset PIN authorization on edit
-                  }}
+                  onChange={(e) => setDiscountInput(e.target.value)}
                   className="!py-2.5 !text-xs !rounded-2xl"
                 />
               </div>
-              {parseFloat(discountInput) > 100000 && (
-                <div className="mb-0.5">
-                  <Button
-                    variant={isDiscountAuthorized ? 'green' : 'red'}
-                    size="sm"
-                    onClick={handleApplyDiscount}
-                    className="h-[43px] flex items-center justify-center gap-1.5 !rounded-2xl"
-                  >
-                    {isDiscountAuthorized ? <Check size={14} strokeWidth={3} /> : <Lock size={14} />}
-                    <span>{isDiscountAuthorized ? 'Authorized' : 'Auth'}</span>
-                  </Button>
-                </div>
-              )}
+              <div className="flex-1">
+                <Input
+                  label="Biaya Admin/Layanan (Rp)"
+                  type="number"
+                  placeholder="Contoh: 150000"
+                  value={adminFeeInput}
+                  onChange={(e) => setAdminFeeInput(e.target.value)}
+                  className="!py-2.5 !text-xs !rounded-2xl"
+                />
+              </div>
             </div>
 
             {/* Employee Split Commission Selection */}
@@ -579,20 +772,37 @@ export const POSView = () => {
                 </select>
               </div>
 
-              <div className="flex flex-col gap-1 text-left">
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-1">
-                  Helper (Opsional)
-                </label>
-                <select
-                  value={checkoutForm.helper}
-                  onChange={(e) => setCheckoutForm({ ...checkoutForm, helper: e.target.value })}
-                  className="w-full border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-bold bg-slate-50/50 dark:bg-slate-800/80 text-slate-855 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-950/50 outline-none transition-all duration-200 cursor-pointer"
-                >
-                  <option value="">-- Pilih Helper --</option>
-                  {allEmployees.map((s) => (
-                    <option key={s.id} value={s.name}>{s.name}</option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-1">
+                    Helper (Opsional)
+                  </label>
+                  <select
+                    value={checkoutForm.helper}
+                    onChange={(e) => setCheckoutForm({ ...checkoutForm, helper: e.target.value })}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-bold bg-slate-50/50 dark:bg-slate-800/80 text-slate-855 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-950/50 outline-none transition-all duration-200 cursor-pointer"
+                  >
+                    <option value="">-- Pilih Helper --</option>
+                    {allEmployees.map((s) => (
+                      <option key={s.id} value={s.name}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="flex flex-col gap-1 text-left">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-1">
+                    Ket. Sinyal
+                  </label>
+                  <select
+                    value={checkoutForm.networkStatus}
+                    onChange={(e) => setCheckoutForm({ ...checkoutForm, networkStatus: e.target.value })}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-bold bg-slate-50/50 dark:bg-slate-800/80 text-slate-855 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-950/50 outline-none transition-all duration-200 cursor-pointer"
+                  >
+                    <option value="">-- Pilih --</option>
+                    <option value="WiFi Only">WiFi Only</option>
+                    <option value="All Operator">All Operator</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -615,8 +825,12 @@ export const POSView = () => {
                 </span>
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Hold and Checkout Buttons */}
+        {/* STICKY BOTTOM BUTTONS */}
+        <div className="pt-3 mt-2 border-t border-slate-100 dark:border-slate-800/40 bg-white dark:bg-slate-900">
+          {/* Hold and Checkout Buttons */}
             <div className="flex gap-2">
               <Button
                 variant="white"
@@ -642,45 +856,6 @@ export const POSView = () => {
       </div>
       
       </div> {/* Closing tag for Main Responsive POS Layout Container */}
-
-      {/* MODAL 1: PIN AUTORISASI ADMIN */}
-      <Modal
-        isOpen={showPinModal}
-        onClose={() => setShowPinModal(false)}
-        title="Otorisasi Diskon Admin"
-        maxWidth="max-w-xs"
-      >
-        <form onSubmit={handleVerifyPin} className="flex flex-col gap-4 text-center">
-          <p className="text-xs font-semibold text-slate-500 m-0">
-            Pemberian diskon melebihi **Rp 100.000** memerlukan otorisasi Owner/Admin.
-          </p>
-          <div className="flex flex-col gap-1 text-left">
-            <Input
-              label="Masukkan PIN Otorisasi"
-              type="password"
-              placeholder="PIN Admin"
-              value={adminPin}
-              onChange={(e) => setAdminPin(e.target.value)}
-              required
-              className="text-center font-mono text-lg tracking-widest !rounded-2xl"
-              maxLength={4}
-              autoFocus
-            />
-            <p className="text-[9px] font-bold text-slate-400 mt-1 pl-1">
-              *Tips Pengujian: Gunakan PIN `1234` (Admin) atau `9999` (Owner).
-            </p>
-          </div>
-          {pinError && <p className="text-xs font-bold text-red-500 m-0 uppercase">{pinError}</p>}
-          <div className="flex justify-end gap-2 mt-2">
-            <Button variant="white" size="sm" onClick={() => setShowPinModal(false)}>
-              Batal
-            </Button>
-            <Button variant="green" size="sm" type="submit">
-              Konfirmasi
-            </Button>
-          </div>
-        </form>
-      </Modal>
 
       {/* MODAL 2: PENDING TRANSACTION LIST (RESUME) */}
       <Modal
@@ -995,13 +1170,13 @@ export const POSView = () => {
         <div className="flex flex-col gap-4 text-center">
           
           {/* Mock E-Receipt Layout */}
-          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 rounded-2xl p-5 font-mono text-[11px] text-left flex flex-col gap-3 relative overflow-hidden shadow-sm transition-all duration-300">
+          <div id="printable-receipt" className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 rounded-2xl p-5 font-mono text-[11px] text-left flex flex-col gap-3 relative overflow-hidden shadow-sm transition-all duration-300">
             
             <div className="text-center border-b border-dashed border-slate-200 dark:border-slate-800/40 pb-3">
               <img src={logoImg} alt="Izy Store Logo" className="w-10 h-10 object-contain mx-auto mb-1.5 rounded-full border border-slate-100 dark:border-slate-800" />
-              <span className="text-xs font-black tracking-wider block text-slate-700 dark:text-slate-200">IZYSTORE GADGET</span>
-              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">ITC Kuningan Lt. 3, Jakarta</span>
-              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">Telp: 0812-9999-8888</span>
+              <span className="text-xs font-black tracking-wider block text-slate-700 dark:text-slate-200">IZYSTORE</span>
+              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block leading-relaxed px-2">Jl. Bend. Sigura-gura Barat No. 22, Malang</span>
+              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">Telp: 0819-9909-4111</span>
             </div>
 
             <div className="flex flex-col gap-1 text-[9px] text-slate-550 dark:text-slate-400">
@@ -1031,6 +1206,14 @@ export const POSView = () => {
                   </span>
                 </div>
               )}
+              {receiptData?.networkStatus && (
+                <div className="flex justify-between mt-0.5">
+                  <span>Keterangan Sinyal:</span>
+                  <span className="font-black text-slate-800 dark:text-slate-100 uppercase">
+                    {receiptData.networkStatus}
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="border-t border-b border-dashed border-slate-200 dark:border-slate-800/40 py-2 flex flex-col gap-2">
@@ -1041,7 +1224,7 @@ export const POSView = () => {
                     <span>{handleFormatRupiah(item.hargaJual * item.qty)}</span>
                   </div>
                   {item.imei && (
-                    <span className="text-[8px] text-slate-400 dark:text-slate-500">IMEI: {item.imei} ({item.kondisi})</span>
+                    <span className="text-[8px] text-slate-400 dark:text-slate-500">IMEI Fisik: {item.imei} ({item.kondisi === 'Bekas' ? 'Second' : item.kondisi})</span>
                   )}
                 </div>
               ))}
@@ -1053,11 +1236,18 @@ export const POSView = () => {
                 <span className="dark:text-slate-300">{handleFormatRupiah(receiptData?.subtotal || 0)}</span>
               </div>
               {receiptData?.discount > 0 && (
-                <div className="flex justify-between text-red-500 dark:text-red-400">
+                <div className="flex justify-between items-center text-[10px] font-bold text-rose-500">
                   <span>Diskon:</span>
                   <span>-{handleFormatRupiah(receiptData?.discount || 0)}</span>
                 </div>
               )}
+              {receiptData?.adminFee > 0 && (
+                <div className="flex justify-between items-center text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                  <span>Biaya Layanan/Admin:</span>
+                  <span>{handleFormatRupiah(receiptData?.adminFee || 0)}</span>
+                </div>
+              )}
+
               <div className="flex justify-between font-black text-xs border-t border-dotted border-slate-200 dark:border-slate-800/40 pt-1.5 text-slate-800 dark:text-slate-100">
                 <span>TOTAL:</span>
                 <span>{handleFormatRupiah(receiptData?.total || 0)}</span>
@@ -1106,19 +1296,27 @@ export const POSView = () => {
           <div className="flex gap-2">
             <Button
               variant="white"
-              onClick={() => alert('Simulasi Cetak Struk ke Printer...')}
-              className="flex-1 flex items-center justify-center gap-1.5 !rounded-xl"
+              onClick={handlePrintReceipt}
+              className="flex-1 flex items-center justify-center gap-1.5 !rounded-xl print:hidden"
             >
               <Printer size={14} />
-              <span>Cetak</span>
+              <span>Cetak (PC)</span>
             </Button>
             <Button
-              variant="blue"
-              onClick={() => alert(`Simulasi Mengirim Invoice ke WhatsApp...`)}
-              className="flex-1 flex items-center justify-center gap-1.5 !rounded-xl"
+              variant="white"
+              onClick={handleAndroidPrint}
+              className="flex-1 flex items-center justify-center gap-1.5 !rounded-xl print:hidden text-blue-600 dark:text-blue-500"
             >
-              <Share2 size={14} />
-              <span>WhatsApp</span>
+              <Smartphone size={14} />
+              <span>Cetak (Android)</span>
+            </Button>
+            <Button
+              variant="white"
+              onClick={handleDownloadReceipt}
+              className="flex-1 flex items-center justify-center gap-1.5 !rounded-xl print:hidden text-orange-600 dark:text-orange-500"
+            >
+              <Download size={14} />
+              <span>Unduh</span>
             </Button>
           </div>
 
@@ -1137,7 +1335,7 @@ export const POSView = () => {
           setSearchQuery(cleanBarcode);
           const matchedProduct = inventory.find(
             (item) => 
-              (item.imei && item.imei.trim().toLowerCase() === cleanBarcode.toLowerCase()) || 
+              (item.barcode && item.barcode.trim().toLowerCase() === cleanBarcode.toLowerCase()) || 
               (item.sku && item.sku.trim().toLowerCase() === cleanBarcode.toLowerCase())
           );
           if (matchedProduct) {

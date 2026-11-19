@@ -108,6 +108,7 @@ export const ServisView = () => {
           sku: sparepartObj.sku,
           model: sparepartObj.model,
           hargaJual: sparepartObj.hargaJual,
+          hargaBeli: sparepartObj.hargaBeli,
           qty: qtyVal,
           imei: sparepartObj.imei,
           kategori: sparepartObj.kategori
@@ -213,7 +214,13 @@ export const ServisView = () => {
       changeAmount: change,
       isSplitPayment: isSplit,
       splitDetails: isSplit ? { method1: splitMethod1, amount1: parseFloat(splitAmount1), method2: splitMethod2, amount2: parseFloat(splitAmount2) } : null,
-      type: 'Servis' // Set custom type to Servis
+      type: 'Servis', // Set custom type to Servis
+      customerName,
+      customerPhone,
+      deviceModel,
+      issueDescription,
+      jasaVal,
+      spareparts: [...usedSpareparts]
     });
 
     if (res.success) {
@@ -268,9 +275,7 @@ export const ServisView = () => {
           <Wrench size={22} className="text-amber-500 animate-pulse" />
           Modul Transaksi Servis & Sparepart
         </h2>
-        <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">
-          Catat transaksi perbaikan perangkat konsumen, pilih suku cadang/aksesoris yang digunakan, masukkan biaya jasa, dan cetak invoice struk servis.
-        </p>
+
       </div>
 
       <form onSubmit={handleOpenCheckout} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -694,9 +699,10 @@ export const ServisView = () => {
           <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 rounded-2xl p-5 font-mono text-[11px] text-left flex flex-col gap-3 relative overflow-hidden shadow-sm transition-all duration-300">
             
             <div className="text-center border-b border-dashed border-slate-200 dark:border-slate-800/40 pb-3">
-              <span className="text-xs font-black tracking-wider block text-slate-700 dark:text-slate-200">IZYSTORE GADGET</span>
-              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">ITC Kuningan Lt. 3, Jakarta</span>
-              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">Nota Servis & Perbaikan</span>
+              <span className="text-xs font-black tracking-wider block text-slate-700 dark:text-slate-200">IZYSTORE</span>
+              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block leading-relaxed px-2">Jl. Bend. Sigura-gura Barat No. 22, Malang</span>
+              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">Telp: 0819-9909-4111</span>
+              <span className="text-[9px] text-slate-800 dark:text-slate-100 font-black block mt-1.5 uppercase bg-slate-100 dark:bg-slate-900 py-1 rounded">Nota Servis & Perbaikan</span>
             </div>
 
             <div className="flex flex-col gap-1 text-[9px] text-slate-500 dark:text-slate-400">

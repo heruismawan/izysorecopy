@@ -5,7 +5,7 @@ import Table from '../components/Table';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import Modal from '../components/Modal';
-import { TrendingUp, Award, Plus, FileText, Trash2 } from 'lucide-react';
+import { TrendingUp, Award, Plus, FileText, Trash2, Calendar, X } from 'lucide-react';
 import logoImg from '../assets/logo.png';
 
 export const ReportsView = () => {
@@ -20,12 +20,43 @@ export const ReportsView = () => {
     description: ''
   });
 
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Filter transactions by date
+  const filteredTransactions = transactions.filter((tx) => {
+    if (!startDate && !endDate) return true;
+    const txLocalDate = new Date(tx.date);
+    const year = txLocalDate.getFullYear();
+    const month = String(txLocalDate.getMonth() + 1).padStart(2, '0');
+    const day = String(txLocalDate.getDate()).padStart(2, '0');
+    const txDateStr = `${year}-${month}-${day}`;
+    
+    if (startDate && txDateStr < startDate) return false;
+    if (endDate && txDateStr > endDate) return false;
+    return true;
+  });
+
+  // Filter expenses by date
+  const filteredExpenses = (expenses || []).filter((exp) => {
+    if (!startDate && !endDate) return true;
+    const expLocalDate = new Date(exp.date);
+    const year = expLocalDate.getFullYear();
+    const month = String(expLocalDate.getMonth() + 1).padStart(2, '0');
+    const day = String(expLocalDate.getDate()).padStart(2, '0');
+    const expDateStr = `${year}-${month}-${day}`;
+    
+    if (startDate && expDateStr < startDate) return false;
+    if (endDate && expDateStr > endDate) return false;
+    return true;
+  });
+
   // 1. Calculate General Dashboard Stats
   let totalRevenue = 0;
   let totalCost = 0;
   let totalCashInflow = 0;
   let totalTradeInAsset = 0;
-  let totalTransactions = transactions.length;
+  let totalTransactions = filteredTransactions.length;
 
   // Sales commissions map
   const salesStats = {};
@@ -39,18 +70,20 @@ export const ReportsView = () => {
   });
 
   // Process all completed transactions
-  transactions.forEach((tx) => {
-    // 1. Omset murni dari subtotal item (jika tx.grosstotal tidak ada)
+  filteredTransactions.forEach((tx) => {
+    // 1. Omset murni dari subtotal item (sudah termasuk jasa service karena diextract ke item) dikurangi Diskon
     const subtotalItems = tx.items.reduce((sum, item) => sum + (item.hargaJual * item.qty), 0);
     const grossVal = tx.grosstotal ?? subtotalItems;
+    const discountVal = Number(tx.discount) || 0;
+    const netRevVal = grossVal - discountVal;
     
     // 2. Aset Masuk (trade in value)
     const tradeInVal = tx.tradeinvalue ?? (tx.tradeInDetails?.taksiranHarga || 0);
     
-    // 3. Uang Masuk (Omset - Aset Masuk)
-    const cashFlowVal = tx.cashinflow ?? (grossVal - tradeInVal);
+    // 3. Uang Masuk (Omset Bersih - Aset Masuk)
+    const cashFlowVal = tx.cashinflow ?? (netRevVal - tradeInVal);
 
-    totalRevenue += grossVal;
+    totalRevenue += netRevVal;
     totalCashInflow += cashFlowVal;
     totalTradeInAsset += tradeInVal;
     
@@ -60,24 +93,20 @@ export const ReportsView = () => {
       totalCost += itemCost;
     });
 
-    // Track salesperson commission stats
-    if (tx.salesperson && salesStats[tx.salesperson]) {
-      salesStats[tx.salesperson].totalSalesRevenue += grossVal;
-      
+    // Track salesperson commission stats (exclude 'Servis' type)
+    if (tx.type !== 'Servis' && tx.salesperson && salesStats[tx.salesperson]) {
+      salesStats[tx.salesperson].totalSalesRevenue += netRevVal;
       const txCost = tx.items.reduce((sum, item) => sum + (item.hargaBeli || 0) * item.qty, 0);
-      salesStats[tx.salesperson].totalSalesProfit += (grossVal - txCost);
-    }
-
-    if (tx.salesperson && salesStats[tx.salesperson]) {
+      salesStats[tx.salesperson].totalSalesProfit += (netRevVal - txCost);
       salesStats[tx.salesperson].transactionsCount += 1;
     }
   });
 
   // Calculate total expenses
-  const totalExpenses = expenses ? expenses.reduce((acc, exp) => acc + exp.amount, 0) : 0;
+  const totalExpenses = filteredExpenses ? filteredExpenses.reduce((acc, exp) => acc + exp.amount, 0) : 0;
 
   // Extract all trade-in assets from transactions
-  const tradeInAssets = transactions
+  const tradeInAssets = filteredTransactions
     .filter(tx => tx.tradeInDetails)
     .map(tx => ({
       id: tx.id,
@@ -156,11 +185,47 @@ export const ReportsView = () => {
           <img src={logoImg} alt="Izy Store Logo" className="w-12 h-12 object-contain rounded-full shadow-sm border border-slate-150 dark:border-slate-800/40" />
           <div>
             <h2 className="text-xl font-black uppercase tracking-wider text-slate-800 dark:text-slate-100 m-0 flex items-center gap-2">
-              <TrendingUp size={22} className="text-rose-500 dark:text-rose-455" />
+              <TrendingUp size={22} className="text-rose-500 dark:text-rose-400" />
               Laporan Keuangan
             </h2>
           </div>
         </div>
+      </div>
+
+      {/* FILTER DATE ROW */}
+      <div className="flex flex-col sm:flex-row gap-3 items-end bg-white dark:bg-slate-900 rounded-3xl border border-white/60 dark:border-slate-800/40 shadow-neo dark:shadow-neo-dark p-5 transition-all duration-300">
+        <div className="w-full sm:w-44">
+          <Input
+            type="date"
+            label="Mulai Tanggal"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            icon={Calendar}
+            className="text-xs"
+          />
+        </div>
+        <div className="w-full sm:w-44">
+          <Input
+            type="date"
+            label="Sampai Tanggal"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            icon={Calendar}
+            className="text-xs"
+          />
+        </div>
+        {(startDate || endDate) && (
+          <button
+            onClick={() => {
+              setStartDate('');
+              setEndDate('');
+            }}
+            className="h-[43px] px-3 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border border-red-200/50 dark:border-red-900/30 rounded-2xl hover:bg-red-100 dark:hover:bg-red-950/30 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0 shadow-sm"
+            title="Hapus Filter Tanggal"
+          >
+            <X size={15} strokeWidth={2.5} />
+          </button>
+        )}
       </div>
 
       {/* DASHBOARD STATS ROW */}
@@ -184,7 +249,7 @@ export const ReportsView = () => {
         </Card>
 
         <Card title="LABA BERSIH" headerBg="bg-emerald-100/70" bodyClassName="p-4">
-          <div className={`text-2xl font-black ${netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-450' : 'text-red-500'}`}>
+          <div className={`text-2xl font-black ${netProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
             {handleFormatRupiah(netProfit)}
           </div>
           <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 mt-1 block">
@@ -241,12 +306,12 @@ export const ReportsView = () => {
         <Card title="Performa Penjualan Sales Karyawan" headerBg="bg-emerald-100/70" bodyClassName="p-4">
           <Table
             headers={['Nama Salesperson', 'Jumlah Transaksi', 'Total Omset Sales']}
-            rows={salespersons}
+            rows={salespersons.filter(s => (salesStats[s.name]?.transactionsCount || 0) > 0)}
             renderRow={(sales) => {
               const stats = salesStats[sales.name] || { transactionsCount: 0, totalSalesRevenue: 0 };
               
               return (
-                <tr key={sales.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-350">
+                <tr key={sales.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-300">
                   <td className="px-3 py-3 font-bold flex items-center gap-1.5 text-slate-800 dark:text-slate-100">
                     <Award size={14} className="text-amber-500" />
                     {sales.name}
@@ -335,10 +400,10 @@ export const ReportsView = () => {
           <div className="max-h-96 overflow-y-auto border border-slate-100 dark:border-slate-800/40 rounded-2xl">
             <Table
               headers={['Tanggal', 'Keterangan Pengeluaran', 'Nominal Biaya', 'Aksi']}
-              rows={expenses || []}
+              rows={filteredExpenses || []}
               renderRow={(exp) => (
-                <tr key={exp.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-350">
-                  <td className="px-4 py-3 text-slate-550 dark:text-slate-400 font-mono text-[10px]">
+                <tr key={exp.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-300">
+                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono text-[10px]">
                     {new Date(exp.date).toLocaleDateString('id-ID')}
                   </td>
                   <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-100 truncate max-w-[220px]" title={exp.description}>
@@ -351,7 +416,7 @@ export const ReportsView = () => {
                     <button
                       onClick={() => handleDeleteExpense(exp.id)}
                       title="Hapus Pengeluaran"
-                      className="p-1.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-405 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-700 dark:hover:text-red-400 hover:scale-105 active:scale-95 shadow-sm transition-all cursor-pointer"
+                      className="p-1.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-950/20 hover:text-red-700 dark:hover:text-red-400 hover:scale-105 active:scale-95 shadow-sm transition-all cursor-pointer"
                     >
                       <Trash2 size={13} strokeWidth={2.5} />
                     </button>
@@ -359,7 +424,7 @@ export const ReportsView = () => {
                 </tr>
               )}
             />
-            {(!expenses || expenses.length === 0) && (
+            {(!filteredExpenses || filteredExpenses.length === 0) && (
               <p className="text-center py-6 font-bold text-slate-400 dark:text-slate-500 m-0 text-xs bg-slate-50 dark:bg-slate-900/40">
                 Belum ada catatan biaya operasional.
               </p>
@@ -389,8 +454,8 @@ export const ReportsView = () => {
               headers={['Tanggal', 'No Invoice', 'Model / Spek', 'Minus / Kerusakan', 'Nilai Aset']}
               rows={tradeInAssets}
               renderRow={(asset) => (
-                <tr key={asset.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-350">
-                  <td className="px-4 py-3 text-slate-550 dark:text-slate-400 font-mono text-[10px]">
+                <tr key={asset.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-300">
+                  <td className="px-4 py-3 text-slate-500 dark:text-slate-400 font-mono text-[10px]">
                     {new Date(asset.date).toLocaleDateString('id-ID')}
                   </td>
                   <td className="px-4 py-3 font-bold text-slate-800 dark:text-slate-100 font-mono">
@@ -398,7 +463,7 @@ export const ReportsView = () => {
                   </td>
                   <td className="px-4 py-3">
                     <span className="font-bold text-slate-800 dark:text-slate-100 block">{asset.model}</span>
-                    <span className="text-[10px] text-slate-450 dark:text-slate-500">{asset.warna} • {asset.rom}</span>
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500">{asset.warna} • {asset.rom}</span>
                   </td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-[200px] truncate" title={asset.minus}>
                     {asset.minus || '-'}

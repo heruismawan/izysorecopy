@@ -171,9 +171,7 @@ export const WarrantyView = () => {
             <ShieldCheck size={22} className="text-emerald-500 dark:text-emerald-400" />
             Manajemen & Klaim Garansi Gadget
           </h2>
-          <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">
-            Cari masa garansi perangkat berdasarkan nomor IMEI, daftarkan klaim kerusakan, dan pantau status servis.
-          </p>
+
         </div>
         <Button variant="green" onClick={handleOpenNewClaimForm} className="flex items-center gap-1.5 !rounded-xl whitespace-nowrap">
           <Plus size={14} strokeWidth={2.5} />
@@ -244,9 +242,9 @@ export const WarrantyView = () => {
                       {searchResult.device.kondisi === 'Bekas' && (
                         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/40 rounded-xl p-2.5 mt-2 flex flex-col gap-1 shadow-sm dark:shadow-none">
                           <span className="font-black uppercase text-slate-400 dark:text-slate-500">INFO ATRIBUT FISIK UNIT:</span>
-                          <div className="text-slate-600 dark:text-slate-400">Garansi Asal: <span className="font-bold text-slate-700 dark:text-slate-350">{searchResult.device.garansiAsal} ({searchResult.device.garansiAktif ? 'Aktif' : 'Tidak Aktif'})</span></div>
-                          <div className="text-slate-600 dark:text-slate-400">Grade Fisik: <span className="font-bold text-slate-700 dark:text-slate-350">{searchResult.device.gradeFisik}</span></div>
-                          <div className="text-slate-600 dark:text-slate-400">Battery Health: <span className="font-bold text-slate-700 dark:text-slate-350">{searchResult.device.batteryHealth ? `${searchResult.device.batteryHealth}%` : '-'}</span></div>
+                          <div className="text-slate-600 dark:text-slate-400">Garansi Asal: <span className="font-bold text-slate-700 dark:text-slate-300">{searchResult.device.garansiAsal} ({searchResult.device.garansiAktif ? 'Aktif' : 'Tidak Aktif'})</span></div>
+                          <div className="text-slate-600 dark:text-slate-400">Grade Fisik: <span className="font-bold text-slate-700 dark:text-slate-300">{searchResult.device.gradeFisik}</span></div>
+                          <div className="text-slate-600 dark:text-slate-400">Battery Health: <span className="font-bold text-slate-700 dark:text-slate-300">{searchResult.device.batteryHealth ? `${searchResult.device.batteryHealth}%` : '-'}</span></div>
                         </div>
                       )}
                     </div>
@@ -283,7 +281,7 @@ export const WarrantyView = () => {
               headers={['Tanggal', 'IMEI Perangkat', 'Pelanggan', 'Kelalaian / Masalah', 'Status']}
               rows={warrantyClaims}
               renderRow={(claim) => (
-                <tr key={claim.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-350">
+                <tr key={claim.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 text-xs font-semibold border-b border-slate-100 dark:border-slate-800/40 text-slate-700 dark:text-slate-300">
                   <td className="px-3 py-3">
                     {new Date(claim.claimDate).toLocaleDateString('id-ID')}
                   </td>

@@ -1,164 +1,145 @@
-// Mock Data untuk POS-Gadget (izystore) - Khusus Apple / iPhone & Tanpa Aksesoris
-
-export const initialUsers = [
-  { id: 'u1', username: 'owner_toko', name: 'Owner Izystore', role: 'owner', pin: '9999' },
-  { id: 'u2', username: 'admin_toko', name: 'Admin Izystore', role: 'admin', pin: '1234' },
-  { id: 'u3', username: 'kasir_toko', name: 'Kasir Izystore', role: 'kasir', pin: '0000' }
+export const mockUsers = [
+  { id: 'u_1', username: 'admin', email: 'admin@izystore.com', name: 'Admin Utama', role: 'owner', pin: '1234' },
+  { id: 'u_2', username: 'kasir1', email: 'kasir1@izystore.com', name: 'Kasir Satu', role: 'kasir', pin: '1111' },
 ];
 
-export const initialSalespersons = [
-  { id: 's1', name: 'Budi Hartono', commissionRate: 0.01 }, // 1% komisi dari profit
-  { id: 's2', name: 'Siti Rahma', commissionRate: 0.01 },
-  { id: 's3', name: 'Rian Wijaya', commissionRate: 0.01 }
-];
-
-export const initialInventory = [
-  // Gadget Baru
+export const mockInventory = [
   {
-    id: 'p1',
-    sku: 'IP15P-128-BLU',
-    imei: '862491053748291',
+    id: 'p_1',
+    sku: 'APP-IP13-NEW-0001',
+    barcode: '1234567890123',
     brand: 'Apple',
-    model: 'iPhone 15 Pro',
-    warna: 'Blue Titanium',
-    rom: '128 GB',
+    model: 'iPhone 13 128GB',
+    warna: 'Midnight',
+    rom: '128GB',
     kondisi: 'Baru',
-    hargaBeli: 17500000,
-    hargaJual: 19499000,
-    stok: 3,
+    hargaBeli: 10000000,
+    hargaJual: 11500000,
+    stok: 5,
     kategori: 'Gadget',
-    createdAt: '2026-05-10T10:00:00Z'
+    garansiAsal: 'Resmi iBox',
+    garansiAktif: true,
+    gradeFisik: 'A',
+    minus: '',
+    createdAt: new Date().toISOString()
   },
   {
-    id: 'p2',
-    sku: 'IP15PM-256-GRY',
-    imei: '359482061738492',
-    brand: 'Apple',
-    model: 'iPhone 15 Pro Max',
-    warna: 'Natural Titanium',
-    rom: '256 GB',
-    kondisi: 'Baru',
-    hargaBeli: 19500000,
-    hargaJual: 22499000,
+    id: 'p_2',
+    sku: 'SAM-S23U-SECO-0002',
+    barcode: '9876543210987',
+    brand: 'Samsung',
+    model: 'Galaxy S23 Ultra 256GB',
+    warna: 'Phantom Black',
+    rom: '256GB',
+    kondisi: 'Bekas',
+    hargaBeli: 12000000,
+    hargaJual: 13500000,
     stok: 2,
     kategori: 'Gadget',
-    createdAt: '2026-05-12T11:00:00Z'
-  },
-  
-  // Gadget Bekas
-  {
-    id: 'p3',
-    sku: 'IP13P-256-GLD-SECO',
-    imei: '358204918273645',
-    brand: 'Apple',
-    model: 'iPhone 13 Pro',
-    warna: 'Gold',
-    rom: '256 GB',
-    kondisi: 'Bekas',
-    hargaBeli: 9000000,
-    hargaJual: 11500000,
-    stok: 1,
-    kategori: 'Gadget',
-    garansiAsal: 'iBox',
-    garansiAktif: false,
-    gradeFisik: 'A',
-    minus: 'Tidak ada minus (Mulus)',
-    createdAt: '2026-05-20T14:30:00Z'
-  },
-  {
-    id: 'p4',
-    sku: 'IP11-128-BLK-SECO',
-    imei: '357193820482910',
-    brand: 'Apple',
-    model: 'iPhone 11',
-    warna: 'Black',
-    rom: '128 GB',
-    kondisi: 'Bekas',
-    hargaBeli: 4000000,
-    hargaJual: 5200000,
-    stok: 1,
-    kategori: 'Gadget',
-    garansiAsal: 'Inter',
+    garansiAsal: 'Resmi SEIN',
     garansiAktif: false,
     gradeFisik: 'B',
-    minus: 'FaceID Rusak/Off',
-    createdAt: '2026-05-22T09:15:00Z'
+    minus: 'Lecet pemakaian',
+    createdAt: new Date().toISOString()
   },
-  // Spareparts / Aksesoris untuk Servis
   {
-    id: 'sp1',
-    sku: 'SP-BAT-IP11',
-    imei: 'BAT-IP11-MOCK',
+    id: 'p_3',
+    sku: 'ACC-CHG-20W-0003',
+    barcode: '8888888888888',
     brand: 'Apple',
-    model: 'Baterai iPhone 11',
-    warna: 'OEM',
+    model: 'Adaptor Charger 20W',
+    warna: 'Putih',
     rom: '-',
     kondisi: 'Baru',
-    hargaBeli: 150000,
+    hargaBeli: 200000,
     hargaJual: 350000,
     stok: 10,
-    kategori: 'Sparepart',
-    createdAt: '2026-06-01T08:00:00Z'
-  },
-  {
-    id: 'sp2',
-    sku: 'SP-LCD-IP13P',
-    imei: 'LCD-IP13P-MOCK',
-    brand: 'Apple',
-    model: 'Layar iPhone 13 Pro',
-    warna: 'Original',
-    rom: '-',
-    kondisi: 'Baru',
-    hargaBeli: 1200000,
-    hargaJual: 2200000,
-    stok: 5,
-    kategori: 'Sparepart',
-    createdAt: '2026-06-01T08:30:00Z'
+    kategori: 'Aksesoris',
+    garansiAsal: 'Resmi',
+    garansiAktif: true,
+    gradeFisik: 'A',
+    minus: '',
+    createdAt: new Date().toISOString()
   }
 ];
 
-export const initialTransactions = [
+export const mockTransactions = [
   {
-    id: 't1',
-    invoiceNo: 'INV-20260601-001',
-    date: '2026-06-01T10:15:00Z',
+    id: 't_1',
+    invoiceNo: 'INV-00000001',
+    date: new Date().toISOString(),
     items: [
-      { id: 'p1', brand: 'Apple', model: 'iPhone 15 Pro', kondisi: 'Baru', imei: '862491053748291', hargaJual: 19499000, hargaBeli: 17500000, qty: 1, kategori: 'Gadget' }
+      {
+        id: 'p_1',
+        brand: 'Apple',
+        model: 'iPhone 13 128GB',
+        kondisi: 'Baru',
+        kategori: 'Gadget',
+        imei: '358123456789012',
+        barcode: '1234567890123',
+        qty: 1,
+        hargaBeli: 10000000,
+        hargaJual: 11500000
+      }
     ],
-    salesperson: 'Budi Hartono',
-    discount: 100000,
-    total: 19399000,
-    paymentMethod: 'Transfer Bank',
-    cashAmount: 19399000,
-    changeAmount: 0,
-    type: 'Penjualan'
-  },
-  {
-    id: 't2',
-    invoiceNo: 'INV-20260602-002',
-    date: '2026-06-02T16:45:00Z',
-    items: [
-      { id: 'p3', brand: 'Apple', model: 'iPhone 13 Pro', kondisi: 'Bekas', imei: '358204918273645', hargaJual: 11500000, hargaBeli: 9000000, qty: 1, kategori: 'Gadget' }
-    ],
-    salesperson: 'Siti Rahma',
+    salesperson: 'Andi',
+    helper: null,
+    salespersonRole: 'Sales',
     discount: 0,
     total: 11500000,
-    paymentMethod: 'Tunai',
+    paymentMethod: 'Transfer',
     cashAmount: 11500000,
     changeAmount: 0,
-    type: 'Penjualan'
+    type: 'Penjualan',
+    customerName: 'Budi',
+    customerPhone: '081234567890',
+    isSplitPayment: false,
+    splitDetails: null,
+    tradeInDetails: null,
+    deviceModel: null,
+    issueDescription: null,
+    jasaVal: 0,
+    spareparts: null,
+    adminFee: 0,
+    network_status: 'Aman'
   }
 ];
 
-export const initialWarrantyClaims = [
+export const mockSalespersons = [
+  { id: 's_1', name: 'Andi' },
+  { id: 's_2', name: 'Budi' },
+  { id: 's_3', name: 'Citra' }
+];
+
+export const mockWarrantyClaims = [
   {
-    id: 'w1',
-    imei: '862491053748291',
-    customerName: 'Ahmad Faisal',
+    id: 'w_1',
+    imei: '358123456789012',
+    customerName: 'Budi',
     customerPhone: '081234567890',
-    claimDate: '2026-06-03T11:00:00Z',
-    issueDescription: 'Layar berkedip hijau setelah pemakaian 3 minggu',
-    status: 'Dalam Perbaikan',
-    notes: 'Unit dikirim ke Service Center Apple.'
+    claimDate: new Date().toISOString(),
+    issueDescription: 'Layar mati tiba-tiba',
+    status: 'Proses',
+    notes: 'Sedang dicek teknisi'
+  }
+];
+
+export const mockExpenses = [
+  {
+    id: 'exp_1',
+    date: new Date().toISOString(),
+    category: 'Operasional',
+    amount: 150000,
+    description: 'Beli token listrik'
+  }
+];
+
+export const mockLoginHistory = [
+  {
+    id: 'lh_1',
+    username: 'admin',
+    login_time: new Date().toISOString(),
+    status: 'Sukses',
+    ip_address: '127.0.0.1'
   }
 ];

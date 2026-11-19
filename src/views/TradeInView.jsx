@@ -30,7 +30,12 @@ export const TradeInView = () => {
   const [oldWarna, setOldWarna] = useState('');
   const [oldRom, setOldRom] = useState('');
   const [oldMinus, setOldMinus] = useState('');
+  const [oldGaransiAsal, setOldGaransiAsal] = useState('Inter');
   const [taksiranHarga, setTaksiranHarga] = useState('');
+  const [oldBarcode, setOldBarcode] = useState('');
+  const [oldHargaJual, setOldHargaJual] = useState('');
+  const [adminFeeInput, setAdminFeeInput] = useState('');
+  const [discountInput, setDiscountInput] = useState('');
 
   // Checkout States
   const [checkoutForm, setCheckoutForm] = useState({
@@ -51,7 +56,7 @@ export const TradeInView = () => {
   const [splitAmount2, setSplitAmount2] = useState('');
 
   const availableGadgets = inventory.filter(
-    (item) => item.kategori === 'Gadget' && item.kondisi === 'Baru' && item.stok > 0
+    (item) => item.stok > 0
   );
 
   const searchResults = searchQuery.trim()
@@ -59,6 +64,7 @@ export const TradeInView = () => {
         (item) =>
           item.model.toLowerCase().includes(searchQuery.toLowerCase()) ||
           (item.imei && item.imei.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (item.barcode && item.barcode.toLowerCase().includes(searchQuery.toLowerCase())) ||
           (item.sku && item.sku.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : [];
@@ -66,7 +72,9 @@ export const TradeInView = () => {
   const newProductObj = inventory.find((p) => p.id === selectedProduct);
   const hargaBaru = newProductObj ? newProductObj.hargaJual : 0;
   const taksiranVal = parseFloat(taksiranHarga) || 0;
-  const netDiff = hargaBaru - taksiranVal;
+  const adminFeeVal = parseFloat(adminFeeInput) || 0;
+  const discountVal = parseFloat(discountInput) || 0;
+  const netDiff = hargaBaru + adminFeeVal - taksiranVal - discountVal;
   const sisaBayar = Math.max(0, netDiff);
 
 
@@ -129,10 +137,12 @@ export const TradeInView = () => {
       model: oldModel,
       warna: oldWarna,
       rom: oldRom,
-      imei: '-',
+      imei: oldBarcode || '-',
+      barcode: oldBarcode || '',
       taksiranHarga: taksiranVal,
+      hargaJual: parseFloat(oldHargaJual) || 0,
       batteryHealth: null,
-      garansiAsal: null,
+      garansiAsal: oldGaransiAsal,
       gradeFisik: null,
       minus: oldMinus,
     };
@@ -142,7 +152,8 @@ export const TradeInView = () => {
       salesperson: checkoutForm.salesperson,
       helper: checkoutForm.helper,
       salespersonRole: 'Sales',
-      discount: 0,
+      discount: discountVal,
+      adminFee: adminFeeVal,
       total: netDiff,
       paymentMethod: payMethodName,
       cashAmount: netDiff >= 0 ? (isSplit ? ((splitMethod1 === 'Tunai' ? parseFloat(splitAmount1) : 0) + (splitMethod2 === 'Tunai' ? parseFloat(splitAmount2) : 0)) : (paymentMethod === 'Tunai' ? cash : sisaBayar)) : 0,
@@ -161,6 +172,8 @@ export const TradeInView = () => {
         salesperson: res.transaction.salesperson,
         helper: res.transaction.helper,
         salespersonRole: res.transaction.salespersonRole,
+        discount: discountVal,
+        adminFee: adminFeeVal,
         total: netDiff,
         paymentMethod: payMethodName,
         cashAmount: netDiff >= 0 ? (isSplit ? ((splitMethod1 === 'Tunai' ? parseFloat(splitAmount1) : 0) + (splitMethod2 === 'Tunai' ? parseFloat(splitAmount2) : 0)) : (paymentMethod === 'Tunai' ? cash : sisaBayar)) : 0,
@@ -179,6 +192,8 @@ export const TradeInView = () => {
       setOldWarna('');
       setOldRom('');
       setTaksiranHarga('');
+      setAdminFeeInput('');
+      setDiscountInput('');
       setIsSplit(false);
 
       setCheckoutForm({ salesperson: '', helper: '' });
@@ -201,9 +216,7 @@ export const TradeInView = () => {
           <RefreshCw size={22} className="text-blue-500 animate-spin-slow" />
           Modul Tukar Tambah (Trade-In)
         </h2>
-        <p className="text-xs font-semibold text-slate-400 dark:text-slate-500 mt-1">
-          Proses transaksi tukar tambah gadget baru dengan HP lama pelanggan. Data IMEI HP lama terintegrasi otomatis.
-        </p>
+
       </div>
 
       <form onSubmit={handleOpenCheckout} className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -238,7 +251,7 @@ export const TradeInView = () => {
                       >
                         <div>
                           <span className="block font-extrabold text-slate-800 dark:text-slate-100">{p.model} ({p.warna} {p.rom})</span>
-                          <span className="text-[10px] text-slate-450 dark:text-slate-500 font-mono">Barcode: {p.imei} • SKU: {p.sku}</span>
+                          <span className="text-[10px] text-slate-450 dark:text-slate-500 font-mono">Barcode: {p.barcode || p.imei || '-'}</span>
                         </div>
                         <div className="text-right">
                           <span className="block text-slate-800 dark:text-slate-100 font-mono">{handleFormatRupiah(p.hargaJual)}</span>
@@ -339,6 +352,20 @@ export const TradeInView = () => {
                 onChange={(e) => setTaksiranHarga(e.target.value)}
                 required
               />
+              
+              <div className="grid grid-cols-2 gap-4 mt-4">
+                <Input
+                  label="Kode Barcode"
+                  value={oldBarcode}
+                  onChange={(e) => setOldBarcode(e.target.value)}
+                />
+                <Input
+                  label="Harga Jual"
+                  type="number"
+                  value={oldHargaJual}
+                  onChange={(e) => setOldHargaJual(e.target.value)}
+                />
+              </div>
             </div>
 
             {/* Spek Khusus Bekas / iPhone */}
@@ -347,7 +374,22 @@ export const TradeInView = () => {
                 Kondisi HP Lama (Auto Masuk Stok Bekas)
               </span>
 
-              <div className="w-full">
+              <div className="w-full flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 pl-1">
+                    Garansi Asal
+                  </label>
+                  <select
+                    value={oldGaransiAsal}
+                    onChange={(e) => setOldGaransiAsal(e.target.value)}
+                    className="w-full border border-slate-200 dark:border-slate-700 rounded-2xl px-3.5 py-2.5 text-xs font-bold bg-slate-50/50 dark:bg-slate-800/80 text-slate-855 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-orange-100 dark:focus:ring-orange-950/50 outline-none transition-all duration-200 cursor-pointer"
+                  >
+                    <option value="Inter">Inter</option>
+                    <option value="iBox">iBox</option>
+                    <option value="Beacukai">Beacukai</option>
+                  </select>
+                </div>
+                
                 <Input
                   label="Catatan Minus / Kerusakan HP Lama"
                   placeholder="Contoh: TrueTone Off, Layar shadow tipis, FaceID Off (kosongkan jika mulus)"
@@ -384,6 +426,27 @@ export const TradeInView = () => {
                 <span className={`text-xl font-black ${netDiff >= 0 ? "text-slate-800 dark:text-slate-100" : "text-emerald-600 dark:text-emerald-450"}`}>
                   {handleFormatRupiah(Math.abs(netDiff))}
                 </span>
+              </div>
+            </div>
+
+            <div className="w-full mt-3 pt-3 border-t border-slate-100 dark:border-slate-800/40 flex gap-2">
+              <div className="flex-1">
+                <Input
+                  label="Diskon Manual (Rp)"
+                  type="number"
+                  placeholder="Contoh: 50000"
+                  value={discountInput}
+                  onChange={(e) => setDiscountInput(e.target.value)}
+                />
+              </div>
+              <div className="flex-1">
+                <Input
+                  label="Biaya Admin/Layanan (Rp)"
+                  type="number"
+                  placeholder="Contoh: 150000"
+                  value={adminFeeInput}
+                  onChange={(e) => setAdminFeeInput(e.target.value)}
+                />
               </div>
             </div>
 
@@ -695,9 +758,10 @@ export const TradeInView = () => {
           <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800/60 rounded-2xl p-5 font-mono text-[11px] text-left flex flex-col gap-3 relative overflow-hidden shadow-sm transition-all duration-300">
             
             <div className="text-center border-b border-dashed border-slate-200 dark:border-slate-800/40 pb-3">
-              <span className="text-xs font-black tracking-wider block text-slate-700 dark:text-slate-200">IZYSTORE GADGET</span>
-              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">ITC Kuningan Lt. 3, Jakarta</span>
-              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">Invoice Tukar Tambah</span>
+              <span className="text-xs font-black tracking-wider block text-slate-700 dark:text-slate-200">IZYSTORE</span>
+              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block leading-relaxed px-2">Jl. Bend. Sigura-gura Barat No. 22, Malang</span>
+              <span className="text-[8px] text-slate-400 dark:text-slate-500 font-bold block">Telp: 0819-9909-4111</span>
+              <span className="text-[9px] text-slate-800 dark:text-slate-100 font-black block mt-1.5 uppercase bg-slate-100 dark:bg-slate-900 py-1 rounded">Invoice Tukar Tambah</span>
             </div>
 
             <div className="flex flex-col gap-1 text-[9px] text-slate-500 dark:text-slate-400">
@@ -746,6 +810,20 @@ export const TradeInView = () => {
                 </div>
               </div>
             </div>
+
+            {receiptData?.discount > 0 && (
+              <div className="border-t border-dotted border-slate-200 dark:border-slate-800/40 pt-2 flex justify-between font-bold text-[10px] text-red-500 dark:text-red-400">
+                <span>Diskon:</span>
+                <span>-{handleFormatRupiah(receiptData?.discount || 0)}</span>
+              </div>
+            )}
+
+            {receiptData?.adminFee > 0 && (
+              <div className="border-t border-dotted border-slate-200 dark:border-slate-800/40 pt-2 flex justify-between font-bold text-[10px] text-slate-600 dark:text-slate-400">
+                <span>Biaya Layanan/Admin:</span>
+                <span>{handleFormatRupiah(receiptData?.adminFee || 0)}</span>
+              </div>
+            )}
 
             {/* Calculations */}
             <div className="flex flex-col gap-1 text-[9px] text-slate-500 dark:text-slate-400">
