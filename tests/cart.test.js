@@ -1,8 +1,8 @@
-import { test, describe, it, mock } from 'node:test';
+import { describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 
 /**
- * Logika fungsi addToCart yang diuji dari IzyStore (src/context/AppContext.jsx)
+ * Unit Under Test: Fungsi addToCart dari IzyStore (src/context/AppContext.jsx)
  */
 export function addToCart(product, cart, setCart) {
   if (product.kategori === 'Gadget') {
@@ -33,9 +33,9 @@ export function addToCart(product, cart, setCart) {
 
 describe('Unit Testing: IzyStore - Fitur Keranjang Kasir (addToCart)', () => {
 
-  // ==========================================
-  // TEST DOUBLE 1: STUB (Objek Data Tiruan)
-  // ==========================================
+  // =========================================================
+  // TEST DOUBLE 1: STUB (Predefined Product Data Objects)
+  // =========================================================
   const stubGadget = {
     id: 1,
     nama: 'iPhone 11 64GB Black',
@@ -52,40 +52,65 @@ describe('Unit Testing: IzyStore - Fitur Keranjang Kasir (addToCart)', () => {
     hargaJual: 250000
   };
 
-  it('TC-01: Berhasil menambahkan produk Gadget baru ke dalam keranjang', () => {
-    // TEST DOUBLE 2: MOCK (Meniru fungsi callback setCart)
-    const mockSetCart = mock.fn();
+  it('TC-01: Berhasil menambahkan produk Gadget baru ke dalam keranjang (Positive)', () => {
+    // =========================
+    // Arrange
+    // =========================
+    const mockSetCart = mock.fn(); // TEST DOUBLE 2: MOCK
     const initialCart = [];
 
+    // =========================
+    // Act
+    // =========================
     const result = addToCart(stubGadget, initialCart, mockSetCart);
 
+    // =========================
+    // Assert
+    // =========================
     assert.equal(result.success, true);
     assert.equal(mockSetCart.mock.calls.length, 1);
     const updatedCart = mockSetCart.mock.calls[0].arguments[0];
     assert.equal(updatedCart.length, 1);
     assert.equal(updatedCart[0].id, stubGadget.id);
     assert.equal(updatedCart[0].qty, 1);
-    assert.ok(updatedCart[0].cartId); // Memiliki unique cartId
+    assert.ok(updatedCart[0].cartId);
   });
 
-  it('TC-02: Menolak penambahan Gadget jika stok di keranjang sudah maksimal', () => {
-    const mockSetCart = mock.fn();
-    // Keranjang sudah berisi 1 unit gadget (sesuai stok maksimal = 1)
+  it('TC-02: Menolak penambahan Gadget jika stok di keranjang sudah maksimal (Negative)', () => {
+    // =========================
+    // Arrange
+    // =========================
+    const mockSetCart = mock.fn(); // TEST DOUBLE 2: MOCK
     const existingCart = [{ ...stubGadget, cartId: 'cart_123', qty: 1 }];
 
+    // =========================
+    // Act
+    // =========================
     const result = addToCart(stubGadget, existingCart, mockSetCart);
 
+    // =========================
+    // Assert
+    // =========================
     assert.equal(result.success, false);
     assert.match(result.message, /Stok gadget ini di keranjang sudah maksimal/);
-    assert.equal(mockSetCart.mock.calls.length, 0); // setCart TIDAK boleh dipanggil
+    assert.equal(mockSetCart.mock.calls.length, 0);
   });
 
-  it('TC-03: Berhasil menambahkan produk Aksesoris baru ke keranjang kosong', () => {
-    const mockSetCart = mock.fn();
+  it('TC-03: Berhasil menambahkan produk Aksesoris baru ke keranjang kosong (Positive)', () => {
+    // =========================
+    // Arrange
+    // =========================
+    const mockSetCart = mock.fn(); // TEST DOUBLE 2: MOCK
     const initialCart = [];
 
+    // =========================
+    // Act
+    // =========================
     const result = addToCart(stubAksesoris, initialCart, mockSetCart);
 
+    // =========================
+    // Assert
+    // =========================
     assert.equal(result.success, true);
     assert.equal(mockSetCart.mock.calls.length, 1);
     const updatedCart = mockSetCart.mock.calls[0].arguments[0];
@@ -93,28 +118,44 @@ describe('Unit Testing: IzyStore - Fitur Keranjang Kasir (addToCart)', () => {
     assert.equal(updatedCart[0].qty, 1);
   });
 
-  it('TC-04: Menambah kuantitas (qty + 1) jika Aksesoris sudah ada di keranjang', () => {
-    const mockSetCart = mock.fn();
-    // Keranjang sudah ada aksesoris dengan qty 1 (stok tersedia = 3)
+  it('TC-04: Menambah kuantitas (qty + 1) jika Aksesoris sudah ada di keranjang (Positive)', () => {
+    // =========================
+    // Arrange
+    // =========================
+    const mockSetCart = mock.fn(); // TEST DOUBLE 2: MOCK
     const existingCart = [{ ...stubAksesoris, qty: 1 }];
 
+    // =========================
+    // Act
+    // =========================
     const result = addToCart(stubAksesoris, existingCart, mockSetCart);
 
+    // =========================
+    // Assert
+    // =========================
     assert.equal(result.success, true);
     assert.equal(mockSetCart.mock.calls.length, 1);
     const updatedCart = mockSetCart.mock.calls[0].arguments[0];
-    assert.equal(updatedCart[0].qty, 2); // Kuantitas bertambah jadi 2
+    assert.equal(updatedCart[0].qty, 2);
   });
 
-  it('TC-05: Menolak penambahan Aksesoris jika kuantitas melebihi stok fisik', () => {
-    const mockSetCart = mock.fn();
-    // Keranjang sudah ada 3 aksesoris (stok fisik = 3)
+  it('TC-05: Menolak penambahan Aksesoris jika kuantitas melebihi stok fisik (Negative)', () => {
+    // =========================
+    // Arrange
+    // =========================
+    const mockSetCart = mock.fn(); // TEST DOUBLE 2: MOCK
     const existingCart = [{ ...stubAksesoris, qty: 3 }];
 
+    // =========================
+    // Act
+    // =========================
     const result = addToCart(stubAksesoris, existingCart, mockSetCart);
 
+    // =========================
+    // Assert
+    // =========================
     assert.equal(result.success, false);
     assert.match(result.message, /Stok aksesoris tidak mencukupi/);
-    assert.equal(mockSetCart.mock.calls.length, 0); // setCart TIDAK dipanggil
+    assert.equal(mockSetCart.mock.calls.length, 0);
   });
 });
