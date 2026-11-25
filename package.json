@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "server": "node server.js",
-    "test": "node --test --experimental-test-coverage tests/cart.test.js"
+    "test": "node --test --experimental-test-coverage tests/fitur*.test.js"
   },
   "dependencies": {
     "cors": "^2.8.6",
